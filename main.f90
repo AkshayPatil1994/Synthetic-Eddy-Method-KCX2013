@@ -1,0 +1,211 @@
+Program generateInflow
+    use, intrinsic :: ieee_arithmetic
+    use utils
+    implicit none
+
+    ! Program Begins
+    integer, parameter :: dp = kind(1.0d0)
+    real(dp), allocatable, dimension(:,:,:) :: random_sequence, spatially_correlated, previous_fluctuation, unscaled_fluctuation
+    real(dp), allocatable, dimension(:,:,:) :: instantaneous_velocity
+    real(dp), allocatable, dimension(:,:,:,:) :: output_result
+    integer :: Ny, Nz
+    integer(dp) :: i,j,k
+    real(dp) :: integralLengthScale, gridsizey, gridsizez
+    real(dp), allocatable, dimension(:) :: b0j_y, b_y, b0j_z, b_z, dz, dy
+    integer, dimension(:) :: seq_shape(3)
+    integer(dp) :: n_y, n_z
+    real(dp) :: pi, C_XC, deltaT, lagrangianTimeScale, alpha1, alpha2
+    real(dp), allocatable, dimension(:) :: z, y
+    real(dp), dimension(2) :: Ly, Lz
+    real(dp), allocatable :: covariancedata(:,:), meandata(:,:)
+    real(dp), dimension(3,3) :: reynolds_stress_tensor, amplitude_tensor
+    integer(dp) :: numcolumns, sizeofarray
+    integer(dp) :: nslices, myslice
+    character(len=100) :: outfilename
+    integer(dp) :: num_elements
+    integer(dp) :: status
+    real(dp) :: ibulkvelocity, trueBulkVelocity
+    real(dp) :: Retau, Hin, viscIn, utau_in, bulk_input_velocity 
+    integer :: time
+
+    ! Define pi
+    pi = acos(-1.0d0)
+    ! Input Retau
+    Retau = 1000.0
+    Hin = 1.885
+    viscIn = 1.0e-5
+    utau_in = (Retau*viscIn)/Hin
+    ! Domain parameters    
+    Ly(1) = 0.0
+    Ly(2) = 2*pi
+    Lz(1) = 0.0
+    Lz(2) = 1.885
+    ! Time step and integral length scale definition
+    integralLengthScale = 100.0*(viscIn/utau_in)        ! Always 100 wall units
+    ! Time step is usually T_epsilon/1000.0
+    deltaT = ((Hin/utau_in)/1000.0)
+    ! Slice input data
+    nslices = 50
+    Ny = 512
+    Nz = 512
+    ! Define the shape of the sequence
+    seq_shape(1) = Ny
+    seq_shape(2) = Nz
+    seq_shape(3) = 3
+    ! Allocate all arrays to be used
+    allocate(y(Ny),z(Nz))
+    allocate(random_sequence(Ny,Nz,3))
+    allocate(output_result(Ny,Nz,nslices,3))
+    allocate(spatially_correlated(Ny,Nz,3))
+    allocate(previous_fluctuation(Ny,Nz,3))
+    allocate(unscaled_fluctuation(Ny,Nz,3))
+    allocate(instantaneous_velocity(Ny,Nz,3))
+    ! Define the size of the array
+    sizeofarray = 3
+    ! Allocate the size of y and z 
+    
+    ! Define the y and z arrays
+    ! print*, "WARNING: This assumes constant grid spacing in y!!"
+    y(1) = Ly(1)
+    do i=2,Ny
+        y(i) = y(i-1) + (Ly(2)-Ly(1))/Ny
+    end do
+    gridsizey = y(10) - y(9)
+    ! Read the file
+    call read_file_skip_first('covar_re1000.dat', covariancedata, numcolumns)  ! Covariance file
+    call read_file_skip_first('mean_re1000.dat', meandata, numcolumns)  ! Umean file
+    ! Fix the mean velocity based on the input utau
+    do k=1,Nz
+        meandata(k,3) = meandata(k,3)*utau_in
+    end do
+    ! Define what z is
+    z(:) = meandata(:,2)
+    z(Nz) = Lz(2)
+
+    !Allocate the grid spacing arrays used to compute the flux
+    allocate(dy(Ny),dz(Nz))
+    ! Compute the grid spacing
+    do k = 3,Nz
+        dz(k) = z(k) - z(k-1)
+    end do
+    dz(2) = dz(3)
+    dz(1) = dz(2)
+    ! Compute the dz
+    do j = 2,Ny
+        dy(j) = y(j) - y(j-1)
+    end do
+    dy(1) = dy(2)
+    ! Compute the bulk input velocity
+    bulk_input_velocity = 0.0d0
+    do k=1,Nz
+        bulk_input_velocity = bulk_input_velocity + meandata(k,3)*dz(k)
+    end do
+    bulk_input_velocity = bulk_input_velocity/Lz(2)
+    ! Compute the lagrangian time scale
+    lagrangianTimeScale = integralLengthScale/(bulk_input_velocity)
+    print *, "-------------------------------------------------------"
+    print *, "Utau input:", utau_in
+    print *, "Integral length scale used", integralLengthScale
+    print *, "Input bulk velocity is", bulk_input_velocity
+    print *, "Lagrangian time scale: ", lagrangianTimeScale
+    print *, "Time step is ", deltaT
+    print *, "-------------------------------------------------------"
+    ! Find the value of n
+    n_y = max(floor(integralLengthScale/gridsizey),1)
+    n_z = max(floor(integralLengthScale/gridsizey),1)   ! assume isotropic turbulence
+    ! Based on n_y allocate b0j_y and b_y
+    allocate(b0j_y(-n_y:n_y),b_y(-n_y:n_y))
+    allocate(b0j_z(-n_z:n_z),b_z(-n_z:n_z))
+    ! Number of slices
+    do myslice=1,nslices
+        call tick(time)
+        ! Define what b model parameter is
+        do i = -n_y, n_y
+            b0j_y(i) = exp(-pi * abs(real(i, dp)) / (2.0*real(n_y, dp)))
+        end do
+
+        do i = -n_z, n_z
+            b0j_z(i) = exp(-pi * abs(real(i, dp)) / (2.0*real(n_z, dp)))
+        end do
+
+        ! Now compute the bj model coefficient
+        b_y = b0j_y/sqrt(sum(b0j_y**2))
+        b_z = b0j_z/sqrt(sum(b0j_z**2))
+
+        ! Generate the raw random sequences
+        do k=1,3
+            do i=1,Nz
+                call generate_normal_random_numbers(0.0_dp,1.0_dp,Ny,random_sequence(:,i,k))
+            end do
+        end do
+
+        ! Use the digital filter
+        call digital_filter(random_sequence, b_y, b_z, spatially_correlated, seq_shape)
+
+        ! Define the coefficients
+        C_XC = pi/4.0
+        alpha1 = exp(-C_XC*deltaT/lagrangianTimeScale)
+        alpha2 = exp(-2.0d0*C_XC*deltaT/lagrangianTimeScale)
+        print *, "Value of alpha is:", alpha1, alpha2
+        unscaled_fluctuation = alpha1 * previous_fluctuation + sqrt(1 - alpha2) * spatially_correlated
+        ! Loop over z and assign the values
+        do k=2,Nz
+            ! Define the reynolds stress tensor
+            reynolds_stress_tensor(1,1) = covariancedata(k,3)*utau_in*utau_in   ! u'u'
+            reynolds_stress_tensor(2,2) = covariancedata(k,5)*utau_in*utau_in   ! v'v'
+            reynolds_stress_tensor(3,3) = covariancedata(k,4)*utau_in*utau_in   ! w'w'
+            reynolds_stress_tensor(1,3) = covariancedata(k,6)*utau_in*utau_in   ! u'w'
+            reynolds_stress_tensor(3,1) = covariancedata(k,6)*utau_in*utau_in   ! w'u'
+            reynolds_stress_tensor(1,2) = covariancedata(k,7)*utau_in*utau_in   ! u'v'
+            reynolds_stress_tensor(2,1) = covariancedata(k,7)*utau_in*utau_in   ! v'u' 
+            reynolds_stress_tensor(2,3) = covariancedata(k,8)*utau_in*utau_in   ! v'w'
+            reynolds_stress_tensor(3,2) = covariancedata(k,8)*utau_in*utau_in   ! w'v'
+            ! Compute the amplitude tensor
+            call cholesky(amplitude_tensor,reynolds_stress_tensor,sizeofarray)      
+            do j=1,Ny
+                call matrix_vector_dot_product(amplitude_tensor, unscaled_fluctuation(j,k,:), instantaneous_velocity(j,k,:))
+                instantaneous_velocity(j,k,1) = instantaneous_velocity(j,k,1) + meandata(k,3)
+            end do
+        end do
+        ! Correct the mass flux to make it divergence free U dot n_x / A_in
+        ! Here U is the velocity vector, n_x is the x unit vector and A_in is the inlet area
+        ibulkvelocity = 0.0d0
+        do j=1,Ny
+            do k=1,Nz
+                ibulkvelocity = ibulkvelocity + instantaneous_velocity(j,k,1)*dz(k)*dy(j)
+            end do 
+        end do
+        ibulkvelocity = ibulkvelocity/(sum(dz)*sum(dy))
+        trueBulkVelocity = 0.0d0
+        do k=1,Nz
+            trueBulkVelocity = trueBulkVelocity + meandata(k,3)*dz(k)
+        end do
+        trueBulkVelocity = trueBulkVelocity/Lz(2)
+        instantaneous_velocity(:,:,1) = instantaneous_velocity(:,:,1)*(trueBulkVelocity/ibulkvelocity)
+        ! Write array to file
+        ! write(outfilename, '("slices/uslicedata_", I0, ".dat")') myslice
+        ! call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,1))
+        ! write(outfilename, '("slices/vslicedata_", I0, ".dat")') myslice
+        ! call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,2))
+        ! write(outfilename, '("slices/wslicedata_", I0, ".dat")') myslice
+        ! call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,3))
+        output_result(:,:,myslice,1) = instantaneous_velocity(:,:,1)
+        output_result(:,:,myslice,2) = instantaneous_velocity(:,:,2)
+        output_result(:,:,myslice,3) = instantaneous_velocity(:,:,3)
+        ! Set the previous fluctuation as the current one for time correlations
+        previous_fluctuation = unscaled_fluctuation
+        ! Write to screen
+        print *, "Bulk V: ", ibulkvelocity
+        print *, "True Bulk: ",trueBulkVelocity
+        print *, "Ratio: ", trueBulkVelocity/ibulkvelocity
+        write(*,*) "Done with ",myslice,"/",nslices,"... in ", tock(time), "seconds..."
+
+    ! End my slice loop    
+    end do
+    ! Write to file
+    open(1,file='slices/finalresult.dat',form='unformatted')
+    write(1) output_result
+    close(1)
+    
+
+End Program generateInflow
