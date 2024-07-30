@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 # USER INPUT
 plotData = False
 saveData = True
-saveSep = True
+saveSep = False
 # Name of the output files
+outfilename='inflow.dat'
 meanoutfile = 'mean_interpolated_re395.dat'
 covaroutfile = 'covar_interpolated_re395.dat'
 # First read the fine data
@@ -13,7 +14,7 @@ covar_org = np.loadtxt('covar_re350.dat',skiprows=1)
 mean_org = np.loadtxt('mean_re350.dat',skiprows=1)
 # Load the new grid to interpolate fine data
 zgrid = np.loadtxt('grid.out')
-myz = zgrid[1:-1,1]         # Set the right z location
+myz = zgrid[:,1]         # Set the right z location
 # Define the data structure to save the values
 mean = np.zeros((len(myz),np.shape(mean_org)[1]))
 covar = np.zeros((len(myz),np.shape(covar_org)[1]))
@@ -61,7 +62,7 @@ if(saveData):
     myheader = ['z', 'Umean', 'Ruu', 'Ruv', 'Ruw', 'Rvu', 'Rvv', 'Rvw', 'Rwu', 'Rwv', 'Rww']
     df = pd.DataFrame(dataout, columns=myheader)
     # Save dataframe as double precision csv with whitespace
-    df.to_csv('inflow.dat', index=False, header=True, sep=' ', float_format='%.15e')
+    df.to_csv(outfilename, index=False, header=True, sep=' ', float_format='%.15e')
 # Save separate files for generating initial conditions
 if(saveSep):
     mymeanheader = ['y','y+','Umean','dUmean/dy' ,'Wmean','dWmean/dy' ,'Pmean']
