@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 # USER INPUT
 plotData = True
-saveData = False
+saveData = True
 saveSep = False
 # FLOW SCALING PARAMETERS
 Re = 392.24
@@ -53,16 +53,16 @@ if(saveData):
     # Assign the right values
     dataout = np.zeros((ds[0], 11))
     dataout[:,0] = mean[:,1]    # Z
-    dataout[:,1] = mean[:,2]    # Umean
-    dataout[:,2] = covar[:,2]   # u'u'
-    dataout[:,3] = covar[:,6]   # u'v'
-    dataout[:,4] = covar[:,5]   # u'w'
-    dataout[:,5] = covar[:,6]   # v'u'
-    dataout[:,6] = covar[:,4]   # v'v'
-    dataout[:,7] = covar[:,7]   # v'w'
-    dataout[:,8] = covar[:,5]   # w'u'
-    dataout[:,9] = covar[:,7]   # w'v'
-    dataout[:,10] = covar[:,3]  # w'w'
+    dataout[:,1] = mean[:,2]/utau    # Umean
+    dataout[:,2] = covar[:,2]/utau**2   # u'u'
+    dataout[:,3] = covar[:,6]/utau**2  # u'v'
+    dataout[:,4] = covar[:,5]/utau**2   # u'w'
+    dataout[:,5] = covar[:,6]/utau**2   # v'u'
+    dataout[:,6] = covar[:,4]/utau**2   # v'v'
+    dataout[:,7] = covar[:,7]/utau**2   # v'w'
+    dataout[:,8] = covar[:,5]/utau**2   # w'u'
+    dataout[:,9] = covar[:,7]/utau**2   # w'v'
+    dataout[:,10] = covar[:,3]/utau**2  # w'w'
     # Write data to file
     myheader = ['z', 'Umean', 'Ruu', 'Ruv', 'Ruw', 'Rvu', 'Rvv', 'Rvw', 'Rwu', 'Rwv', 'Rww']
     df = pd.DataFrame(dataout, columns=myheader)
