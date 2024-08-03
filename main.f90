@@ -7,16 +7,15 @@ Program generateInflow
     integer, parameter :: dp = kind(1.0d0)
     real(dp), allocatable, dimension(:,:,:) :: random_sequence, spatially_correlated, previous_fluctuation, unscaled_fluctuation
     real(dp), allocatable, dimension(:,:,:) :: instantaneous_velocity
-    real(dp), allocatable, dimension(:,:,:,:) :: output_result
     integer :: Ny, Nz
     integer(dp) :: i,j,k
-    real(dp) :: integralLengthScale, gridsizey, gridsizez
+    real(dp) :: integralLengthScale, integralLengthScale_in, gridsizey, gridsizez
     real(dp), allocatable, dimension(:) :: b0j_y, b_y, b0j_z, b_z, dz, dy
     integer, dimension(:) :: seq_shape(3)
     integer(dp) :: n_y, n_z
     real(dp) :: pi, C_XC, deltaT, lagrangianTimeScale, alpha1, alpha2
     real(dp), allocatable, dimension(:) :: z, y
-    real(dp), dimension(2) :: Ly, Lz
+    real(dp), dimension(2) :: Lx, Ly, Lz
     real(dp), allocatable :: covariancedata(:,:), meandata(:,:)
     real(dp), dimension(3,3) :: reynolds_stress_tensor, amplitude_tensor
     integer(dp) :: numcolumns, sizeofarray
@@ -26,28 +25,38 @@ Program generateInflow
     integer(dp) :: status
     real(dp) :: ibulkvelocity, trueBulkVelocity
     real(dp) :: Retau, Hin, viscIn, utau_in, bulk_input_velocity 
-    integer :: time
-
+    integer :: time, ierr, iunit
+    character(len=512) :: covarfilein, meanfilein
     ! Define pi
     pi = acos(-1.0d0)
-    ! Input Retau
-    Retau = 1000.0
-    Hin = 1.885
-    viscIn = 1.0e-5
-    utau_in = (Retau*viscIn)/Hin
-    ! Domain parameters    
+
+    ! Define file unit
+    ! Snippet taken from CaNS - Credits to P. Costa
+    iunit = 10
+    open(newunit=iunit,file='parameters.in',status='old',action='read',iostat=ierr)
+      if( ierr == 0 ) then
+        read(iunit,*,iostat=ierr) nslices, Ny, Nz
+        read(iunit,*,iostat=ierr) Lx(2), Ly(2), Lz(2)
+        read(iunit,*,iostat=ierr) integralLengthScale_in
+        read(iunit,*,iostat=ierr) Retau, Hin, viscIn
+        read(iunit,*,iostat=ierr) deltaT
+        read(iunit,*,iostat=ierr) covarfilein
+        read(iunit,*,iostat=ierr) meanfilein
+      else
+        error stop "parameters.in file encountered a problem!"
+      end if
+    ! Compute the friction velocity based on input parameters
+    utau_in = (Retau*viscIn)/Hin    
+    ! Domain parameters  
+    Lx(1) = 0.0
     Ly(1) = 0.0
-    Ly(2) = 2*pi
     Lz(1) = 0.0
-    Lz(2) = 1.885
-    ! Time step and integral length scale definition
-    integralLengthScale = 100.0*(viscIn/utau_in)        ! Always 100 wall units
-    ! Time step is usually T_epsilon/1000.0
-    deltaT = ((Hin/utau_in)/1000.0)
-    ! Slice input data
-    nslices = 50
-    Ny = 512
-    Nz = 512
+    ! Integral length scale in dimensional units
+    integralLengthScale = integralLengthScale_in*(viscIn/utau_in)        ! Always 100 wall units
+    ! Fix deltaT based on user input
+    if(deltaT .le. 0.0) then
+        deltaT = ((Hin/utau_in)/1000.0)
+    end if
     ! Define the shape of the sequence
     seq_shape(1) = Ny
     seq_shape(2) = Nz
@@ -55,25 +64,21 @@ Program generateInflow
     ! Allocate all arrays to be used
     allocate(y(Ny),z(Nz))
     allocate(random_sequence(Ny,Nz,3))
-    allocate(output_result(Ny,Nz,nslices,3))
     allocate(spatially_correlated(Ny,Nz,3))
     allocate(previous_fluctuation(Ny,Nz,3))
     allocate(unscaled_fluctuation(Ny,Nz,3))
     allocate(instantaneous_velocity(Ny,Nz,3))
     ! Define the size of the array
     sizeofarray = 3
-    ! Allocate the size of y and z 
-    
     ! Define the y and z arrays
-    ! print*, "WARNING: This assumes constant grid spacing in y!!"
     y(1) = Ly(1)
     do i=2,Ny
         y(i) = y(i-1) + (Ly(2)-Ly(1))/Ny
     end do
     gridsizey = y(10) - y(9)
     ! Read the file
-    call read_file_skip_first('covar_re1000.dat', covariancedata, numcolumns)  ! Covariance file
-    call read_file_skip_first('mean_re1000.dat', meandata, numcolumns)  ! Umean file
+    call read_file_skip_first(covarfilein, covariancedata, numcolumns)  ! Covariance file
+    call read_file_skip_first(meanfilein, meandata, numcolumns)  ! Umean file
     ! Fix the mean velocity based on the input utau
     do k=1,Nz
         meandata(k,3) = meandata(k,3)*utau_in
@@ -81,7 +86,6 @@ Program generateInflow
     ! Define what z is
     z(:) = meandata(:,2)
     z(Nz) = Lz(2)
-
     !Allocate the grid spacing arrays used to compute the flux
     allocate(dy(Ny),dz(Nz))
     ! Compute the grid spacing
@@ -110,6 +114,7 @@ Program generateInflow
     print *, "Lagrangian time scale: ", lagrangianTimeScale
     print *, "Time step is ", deltaT
     print *, "-------------------------------------------------------"
+    print *, "WARNING: The digital filter has isotropic kernel both in y and z!"
     ! Find the value of n
     n_y = max(floor(integralLengthScale/gridsizey),1)
     n_z = max(floor(integralLengthScale/gridsizey),1)   ! assume isotropic turbulence
@@ -182,30 +187,21 @@ Program generateInflow
         end do
         trueBulkVelocity = trueBulkVelocity/Lz(2)
         instantaneous_velocity(:,:,1) = instantaneous_velocity(:,:,1)*(trueBulkVelocity/ibulkvelocity)
-        ! Write array to file
-        ! write(outfilename, '("slices/uslicedata_", I0, ".dat")') myslice
-        ! call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,1))
-        ! write(outfilename, '("slices/vslicedata_", I0, ".dat")') myslice
-        ! call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,2))
-        ! write(outfilename, '("slices/wslicedata_", I0, ".dat")') myslice
-        ! call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,3))
-        output_result(:,:,myslice,1) = instantaneous_velocity(:,:,1)
-        output_result(:,:,myslice,2) = instantaneous_velocity(:,:,2)
-        output_result(:,:,myslice,3) = instantaneous_velocity(:,:,3)
         ! Set the previous fluctuation as the current one for time correlations
         previous_fluctuation = unscaled_fluctuation
         ! Write to screen
         print *, "Bulk V: ", ibulkvelocity
         print *, "True Bulk: ",trueBulkVelocity
         print *, "Ratio: ", trueBulkVelocity/ibulkvelocity
+        ! Write individual slices
+        write(outfilename, '("slices/uslicedata_", I0, ".dat")') myslice
+        call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,1))
+        write(outfilename, '("slices/vslicedata_", I0, ".dat")') myslice
+        call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,2))
+        write(outfilename, '("slices/wslicedata_", I0, ".dat")') myslice
+        call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,3))
         write(*,*) "Done with ",myslice,"/",nslices,"... in ", tock(time), "seconds..."
-
     ! End my slice loop    
     end do
-    ! Write to file
-    open(1,file='slices/finalresult.dat',form='unformatted')
-    write(1) output_result
-    close(1)
-    
 
 End Program generateInflow
