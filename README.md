@@ -2,6 +2,7 @@
 
 ## How to compile the code
 ```
+cd src
 gfortran -O3 -fcheck=bounds utils.f90 main.f90 -o genflow
 ```
 
