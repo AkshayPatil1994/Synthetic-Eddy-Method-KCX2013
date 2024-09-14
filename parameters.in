@@ -1,7 +1,6 @@
-128 512 256             ! Nslices == Nx, Ny, Nz
-4.0 5.0 1.0             ! Lx, Ly, Lz
-50.0                    ! Integral Length scale in wall units
-500.0 1.0 1.0e-6        ! Retauin, Hin, viscin
-1.0e-3                  ! dt (if dt < 0 then dt == T_eddy/1000.0)
-'covariance_file.dat'   ! Name of the covariance data
-'mean_file.dat'         ! Name of the mean data
+1000 600 256             ! Nslices == Nx, Ny, Nz
+2.0 0.4 0.12             ! Lx, Ly, Lz
+100.0                    ! Integral Length scale in wall units
+720.0 0.12 1.0e-6        ! Retauin, Hin, viscin
+-1.0e-2                  ! dt (if dt < 0 then dt == T_eddy/1000.0)
+'inflow.dat'		     ! Name of the reference inflow data

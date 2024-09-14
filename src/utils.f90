@@ -337,4 +337,68 @@ Contains
     tock = real(now - t)/real(clock_rate)
   end function tock
 
+  ! subroutine show_progress(current, total, width)
+  !   ! 
+  !   ! This subroutine aims to display a progress bar
+  !   !
+  !   implicit none
+  !   integer, parameter :: dp = kind(1.0d0)
+  !   integer(dp), intent(in) :: current, total, width
+  !   integer(dp) :: progress, i
+  !   real(dp) :: percent
+  !   character(len=width) :: bar
+
+  !   ! Calculate percentage and progress bar length
+  !   percent = real(current) / real(total) * 100.0
+  !   progress = int((current / real(total)) * width)
+
+  !   ! Construct the progress bar string
+  !   bar = repeat('#', progress) // repeat(' ', width - progress)
+
+  !   ! Print the progress bar
+  !   write(*,'(1x, "[", a, "]", f6.2, "%", 1x, i4, "/", i4)', advance='no') bar, percent, current, total
+
+  !   ! Clear the line and print the updated progress
+  !   if (current == total) then
+  !       print *  ! Print final progress and move to a new line
+  !   else
+  !       write(*,*)  ! Clears the line after the bar (to update on the same line)
+  !   end if
+  ! end subroutine show_progress
+  subroutine show_progress(current, total, width)
+    ! 
+    ! This subroutine aims to display a progress bar and overwrite the same line
+    !
+    implicit none
+    integer, parameter :: dp = kind(1.0d0)
+    integer(dp), intent(in) :: current, total, width
+    integer(dp) :: progress
+    real(dp) :: percent
+    character(len=width) :: bar
+
+    ! Calculate percentage and progress bar length
+    percent = real(current) / real(total) * 100.0
+    progress = int(real(current) / real(total) * width)
+
+    ! Construct the progress bar string
+    bar = repeat('|', progress) // repeat(' ', width - progress)
+
+    ! Print the progress bar with a carriage return to stay on the same line
+    write(*,'(a, "|", a, "|", f6.2, "%", 1x, i4, "/", i4)', advance='no') char(13), bar, percent, current, total
+
+    ! If the current iteration is the last, move to a new line
+    if (current == total) then
+        print *  ! Move to the next line after the final iteration
+    end if
+end subroutine show_progress
+
+  subroutine printlogo()
+    write(*,*) " ░▒▓██████▓▒░░▒▓████████▓▒░▒▓███████▓▒░░▒▓█▓▒░░▒▓██████▓▒░  " 
+    write(*,*) "░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░ " 
+    write(*,*) "░▒▓█▓▒░      ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░        "
+    write(*,*) "░▒▓█▓▒▒▓███▓▒░▒▓██████▓▒░ ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░        "
+    write(*,*) "░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░        "
+    write(*,*) "░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░ "
+    write(*,*) " ░▒▓██████▓▒░░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓██████▓▒░  "                                                                                                                
+  end subroutine printlogo
 End Module utils

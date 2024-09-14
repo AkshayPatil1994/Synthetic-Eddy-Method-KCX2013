@@ -16,17 +16,15 @@ Program generateInflow
     real(dp) :: pi, C_XC, deltaT, lagrangianTimeScale, alpha1, alpha2
     real(dp), allocatable, dimension(:) :: z, y
     real(dp), dimension(2) :: Lx, Ly, Lz
-    real(dp), allocatable :: covariancedata(:,:), meandata(:,:)
+    real(dp), allocatable :: inflowdata(:,:)
     real(dp), dimension(3,3) :: reynolds_stress_tensor, amplitude_tensor
     integer(dp) :: numcolumns, sizeofarray
-    integer(dp) :: nslices, myslice
+    integer(dp) :: nslices, myslice, charwidth=50
     character(len=100) :: outfilename
-    integer(dp) :: num_elements
-    integer(dp) :: status
     real(dp) :: ibulkvelocity, trueBulkVelocity
     real(dp) :: Retau, Hin, viscIn, utau_in, bulk_input_velocity 
     integer :: time, ierr, iunit
-    character(len=512) :: covarfilein, meanfilein
+    character(len=512) :: inputfile
     ! Define pi
     pi = acos(-1.0d0)
 
@@ -40,8 +38,7 @@ Program generateInflow
         read(iunit,*,iostat=ierr) integralLengthScale_in
         read(iunit,*,iostat=ierr) Retau, Hin, viscIn
         read(iunit,*,iostat=ierr) deltaT
-        read(iunit,*,iostat=ierr) covarfilein
-        read(iunit,*,iostat=ierr) meanfilein
+        read(iunit,*,iostat=ierr) inputfile
       else
         error stop "parameters.in file encountered a problem!"
       end if
@@ -77,15 +74,13 @@ Program generateInflow
     end do
     gridsizey = y(10) - y(9)
     ! Read the file
-    call read_file_skip_first(covarfilein, covariancedata, numcolumns)  ! Covariance file
-    call read_file_skip_first(meanfilein, meandata, numcolumns)  ! Umean file
+    call read_file_skip_first(inputfile, inflowdata, numcolumns)  ! Covariance file
     ! Fix the mean velocity based on the input utau
     do k=1,Nz
-        meandata(k,3) = meandata(k,3)*utau_in
+        inflowdata(k,2) = inflowdata(k,2)*utau_in
     end do
     ! Define what z is
-    z(:) = meandata(:,2)
-    z(Nz) = Lz(2)
+    z(:) = inflowdata(:,1)
     !Allocate the grid spacing arrays used to compute the flux
     allocate(dy(Ny),dz(Nz))
     ! Compute the grid spacing
@@ -102,11 +97,13 @@ Program generateInflow
     ! Compute the bulk input velocity
     bulk_input_velocity = 0.0d0
     do k=1,Nz
-        bulk_input_velocity = bulk_input_velocity + meandata(k,3)*dz(k)
+        bulk_input_velocity = bulk_input_velocity + inflowdata(k,2)*dz(k)
     end do
     bulk_input_velocity = bulk_input_velocity/Lz(2)
     ! Compute the lagrangian time scale
     lagrangianTimeScale = integralLengthScale/(bulk_input_velocity)
+    ! Print logo
+    call printlogo()
     print *, "-------------------------------------------------------"
     print *, "Utau input:", utau_in
     print *, "Integral length scale used", integralLengthScale
@@ -151,25 +148,25 @@ Program generateInflow
         C_XC = pi/4.0
         alpha1 = exp(-C_XC*deltaT/lagrangianTimeScale)
         alpha2 = exp(-2.0d0*C_XC*deltaT/lagrangianTimeScale)
-        print *, "Value of alpha is:", alpha1, alpha2
+        if(myslice==1) print *, "Value of alpha is:", alpha1, alpha2
         unscaled_fluctuation = alpha1 * previous_fluctuation + sqrt(1 - alpha2) * spatially_correlated
         ! Loop over z and assign the values
         do k=2,Nz
             ! Define the reynolds stress tensor
-            reynolds_stress_tensor(1,1) = covariancedata(k,3)*utau_in*utau_in   ! u'u'
-            reynolds_stress_tensor(2,2) = covariancedata(k,5)*utau_in*utau_in   ! v'v'
-            reynolds_stress_tensor(3,3) = covariancedata(k,4)*utau_in*utau_in   ! w'w'
-            reynolds_stress_tensor(1,3) = covariancedata(k,6)*utau_in*utau_in   ! u'w'
-            reynolds_stress_tensor(3,1) = covariancedata(k,6)*utau_in*utau_in   ! w'u'
-            reynolds_stress_tensor(1,2) = covariancedata(k,7)*utau_in*utau_in   ! u'v'
-            reynolds_stress_tensor(2,1) = covariancedata(k,7)*utau_in*utau_in   ! v'u' 
-            reynolds_stress_tensor(2,3) = covariancedata(k,8)*utau_in*utau_in   ! v'w'
-            reynolds_stress_tensor(3,2) = covariancedata(k,8)*utau_in*utau_in   ! w'v'
+            reynolds_stress_tensor(1,1) = inflowdata(k,3)*utau_in*utau_in   ! Ruu
+            reynolds_stress_tensor(1,2) = inflowdata(k,4)*utau_in*utau_in   ! Ruv
+            reynolds_stress_tensor(1,3) = inflowdata(k,5)*utau_in*utau_in   ! Ruw
+            reynolds_stress_tensor(2,1) = inflowdata(k,6)*utau_in*utau_in   ! Rvu
+            reynolds_stress_tensor(2,2) = inflowdata(k,7)*utau_in*utau_in   ! Rvv
+            reynolds_stress_tensor(2,3) = inflowdata(k,8)*utau_in*utau_in   ! Rvw
+            reynolds_stress_tensor(3,1) = inflowdata(k,9)*utau_in*utau_in   ! Rwu 
+            reynolds_stress_tensor(3,2) = inflowdata(k,10)*utau_in*utau_in  ! Rwv
+            reynolds_stress_tensor(3,3) = inflowdata(k,11)*utau_in*utau_in  ! Rww
             ! Compute the amplitude tensor
             call cholesky(amplitude_tensor,reynolds_stress_tensor,sizeofarray)      
             do j=1,Ny
                 call matrix_vector_dot_product(amplitude_tensor, unscaled_fluctuation(j,k,:), instantaneous_velocity(j,k,:))
-                instantaneous_velocity(j,k,1) = instantaneous_velocity(j,k,1) + meandata(k,3)
+                instantaneous_velocity(j,k,1) = instantaneous_velocity(j,k,1) + inflowdata(k,2)
             end do
         end do
         ! Correct the mass flux to make it divergence free U dot n_x / A_in
@@ -183,16 +180,16 @@ Program generateInflow
         ibulkvelocity = ibulkvelocity/(sum(dz)*sum(dy))
         trueBulkVelocity = 0.0d0
         do k=1,Nz
-            trueBulkVelocity = trueBulkVelocity + meandata(k,3)*dz(k)
+            trueBulkVelocity = trueBulkVelocity + inflowdata(k,2)*dz(k)
         end do
-        trueBulkVelocity = trueBulkVelocity/Lz(2)
+        trueBulkVelocity = 0.5*trueBulkVelocity/Lz(2)
         instantaneous_velocity(:,:,1) = instantaneous_velocity(:,:,1)*(trueBulkVelocity/ibulkvelocity)
         ! Set the previous fluctuation as the current one for time correlations
         previous_fluctuation = unscaled_fluctuation
         ! Write to screen
-        print *, "Bulk V: ", ibulkvelocity
-        print *, "True Bulk: ",trueBulkVelocity
-        print *, "Ratio: ", trueBulkVelocity/ibulkvelocity
+        !print *, "Bulk V: ", ibulkvelocity
+        !print *, "True Bulk: ",trueBulkVelocity
+        !print *, "Ratio: ", trueBulkVelocity/ibulkvelocity
         ! Write individual slices
         write(outfilename, '("slices/uslicedata_", I0, ".dat")') myslice
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,1))
@@ -200,7 +197,8 @@ Program generateInflow
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,2))
         write(outfilename, '("slices/wslicedata_", I0, ".dat")') myslice
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,3))
-        write(*,*) "Done with ",myslice,"/",nslices,"... in ", tock(time), "seconds..."
+        !write(*,*) "Done with ",myslice,"/",nslices,"... in ", tock(time), "seconds..."
+        call show_progress(myslice,nslices,charwidth)
     ! End my slice loop    
     end do
 
