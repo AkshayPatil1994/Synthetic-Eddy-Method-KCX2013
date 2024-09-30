@@ -9,6 +9,12 @@ gfortran -ffree-line-length-none -O3 utils.f90 main.f90 -o genic
 ## How to change parameters
 Follow the instructions in `parameters.in` to change the input parameters
 
+## Setup the `inflow.dat` input file
+A reference `inflow.dat` has been listed in the `python/inflow.dat` directory of the code. The file contains the **dimensional** vertical coordinate `z` or `$x_3$` and **non-dimensional** mean velocity and Reynolds stress tensor components used by the code to generate the initial conditions. 
+
+1. Be sure to have the profiles collocated with the vertical grid used in the simulation
+2. The first line of the file is ignored as it is the header file containing the information about the column data
+
 ## How to run the code
 Copy the `parameters.in` file to the same location as the executable `genic`
 ```
