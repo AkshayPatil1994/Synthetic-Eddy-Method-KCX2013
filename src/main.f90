@@ -25,6 +25,7 @@ Program generateInflow
     real(dp) :: Retau, Hin, viscIn, utau_in, bulk_input_velocity 
     integer :: time, ierr, iunit
     character(len=512) :: inputfile
+    logical :: filestatus
     ! Define pi
     pi = acos(-1.0d0)
 
@@ -112,6 +113,13 @@ Program generateInflow
     print *, "Time step is ", deltaT
     print *, "-------------------------------------------------------"
     print *, "WARNING: The digital filter has isotropic kernel both in y and z!"
+    ! Check for the output file status
+    inquire(file="slices", exist=filestatus)
+    if (.not. filestatus) then
+        ! Creating the folder for output
+        print *, " - - - Output directory `slices` does not exist, creating it..."
+        call system('mkdir slices')
+    endif
     ! Find the value of n
     n_y = max(floor(integralLengthScale/gridsizey),1)
     n_z = max(floor(integralLengthScale/gridsizey),1)   ! assume isotropic turbulence

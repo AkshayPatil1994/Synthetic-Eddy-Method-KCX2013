@@ -15,6 +15,16 @@ A reference `inflow.dat` has been listed in the `python/inflow.dat` directory of
 1. Be sure to have the profiles collocated with the vertical grid used in the simulation
 2. The first line of the file is ignored as it is the header file containing the information about the column data
 
+How to obtain the `inflow.dat` file from scratch?
+
+1. Download the reference data from a datasource of your choice. For standard datasets for channel flows, the Texas university fileserver is a good options (https://turbulence.oden.utexas.edu/)
+2. Be sure to download the mean profiles and the covariance profiles
+3. Consult the python script `interpolate_data2newgrid.py` to see how the data is arranged. 
+**WARNING** This code assumes that the z direction is vertical!
+4. Use the `interpolate_data2newgrid.py` script to interpolate the data on your simulation grid.
+5. Once that is completed, you can use the `inflow.dat` to run the fortran code that generates individual slices.
+6. These slices can then be stitched together using the `generate_inflow4CaNS.py` script which will output the `fld.bin` file used in CaNS as a checkpoint. Note that the checkpoint starts at `t = 0`.
+
 ## How to run the code
 Copy the `parameters.in` file to the same location as the executable `genic`
 ```
