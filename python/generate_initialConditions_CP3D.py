@@ -1,7 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-
+#
+# This function writes the restart file for CP3D
+#
 def n2carray(udata,vdata,wdata,fileout,time=np.array(0.0),iteration=np.array(1,dtype=np.int64),scaling=1.0):
     # Now flatten the array
     udata = scaling*udata.flatten(order='F')	        # Flatten it to make FORTRAN binary compatible
@@ -14,8 +16,6 @@ def n2carray(udata,vdata,wdata,fileout,time=np.array(0.0),iteration=np.array(1,d
         vdata.tofile(f)
         wdata.tofile(f)
         pdata.tofile(f)
-        time.tofile(f)
-        iteration.tofile(f)
     f.close()
 # START MAIN PROGRAM
 writeRestart = True
