@@ -190,7 +190,7 @@ Program generateInflow
         do k=1,Nz
             trueBulkVelocity = trueBulkVelocity + inflowdata(k,2)*dz(k)
         end do
-        trueBulkVelocity = 0.5*trueBulkVelocity/Lz(2)
+        trueBulkVelocity = trueBulkVelocity/Lz(2)
         instantaneous_velocity(:,:,1) = instantaneous_velocity(:,:,1)*(trueBulkVelocity/ibulkvelocity)
         ! Set the previous fluctuation as the current one for time correlations
         previous_fluctuation = unscaled_fluctuation
