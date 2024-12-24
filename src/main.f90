@@ -51,10 +51,6 @@ Program generateInflow
     Lz(1) = 0.0
     ! Integral length scale in dimensional units
     integralLengthScale = integralLengthScale_in*(viscIn/utau_in)        ! Always 100 wall units
-    ! Fix deltaT based on user input
-    if(deltaT .le. 0.0) then
-        deltaT = ((Hin/utau_in)/1000.0)
-    end if
     ! Define the shape of the sequence
     seq_shape(1) = Ny
     seq_shape(2) = Nz
@@ -103,6 +99,10 @@ Program generateInflow
     bulk_input_velocity = bulk_input_velocity/Lz(2)
     ! Compute the lagrangian time scale
     lagrangianTimeScale = integralLengthScale/(bulk_input_velocity)
+    ! Fix deltaT based on user input
+    if(deltaT .le. 0.0) then
+        deltaT = 0.95*(Lx(2)/Nx)/bulk_input_velocity
+    end if
     ! Print logo
     call printlogo()
     print *, "-------------------------------------------------------"
