@@ -101,7 +101,7 @@ Program generateInflow
     lagrangianTimeScale = integralLengthScale/(bulk_input_velocity)
     ! Fix deltaT based on user input
     if(deltaT .le. 0.0) then
-        deltaT = 0.95*(Lx(2)/Nx)/bulk_input_velocity
+        deltaT = 0.95*(Lx(2)/nslices)/bulk_input_velocity
     end if
     ! Print logo
     call printlogo()
