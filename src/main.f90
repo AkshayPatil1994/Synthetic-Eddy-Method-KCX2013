@@ -178,6 +178,7 @@ Program generateInflow
             end do
         end do
         ! Correct the mass flux to make it divergence free U dot n_x / A_in
+        ! NOTE: Mass flux is not corrected!
         ! Here U is the velocity vector, n_x is the x unit vector and A_in is the inlet area
         ibulkvelocity = 0.0d0
         do j=1,Ny
