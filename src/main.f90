@@ -35,6 +35,8 @@ Program generateInflow
     real(dp) :: ibulkvelocity, trueBulkVelocity
     ! Input parameters
     real(dp) :: Retau, Hin, viscIn, utau_in, bulk_input_velocity  
+    ! Verbose I/O for decomposition
+    logical :: verbose = .false.
 !-------------------------------------------------------------------------------------------!
 !                                   PROGRAM BEGINS                                          !
 !-------------------------------------------------------------------------------------------!
@@ -161,7 +163,7 @@ Program generateInflow
         startslice = remainder * (base_slices + 1) + (myid - remainder) * base_slices + 1
         endslice = startslice + base_slices - 1
     end if
-    print *, myid, startslice, endslice
+    if(verbose) print *, myid, startslice, endslice
     ! Sync all MPI ranks before proceeding
     call MPI_BARRIER(MPI_COMM_WORLD,ierror) 
     ! Number of slices
@@ -233,10 +235,6 @@ Program generateInflow
         instantaneous_velocity(:,:,1) = instantaneous_velocity(:,:,1)*(trueBulkVelocity/ibulkvelocity)
         ! Set the previous fluctuation as the current one for time correlations
         previous_fluctuation = unscaled_fluctuation
-        ! Write to screen
-        !print *, "Bulk V: ", ibulkvelocity
-        !print *, "True Bulk: ",trueBulkVelocity
-        !print *, "Ratio: ", trueBulkVelocity/ibulkvelocity
         ! Write individual slices
         write(outfilename, '("slices/uslicedata_", I0, ".dat")') myslice
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,1))
@@ -244,7 +242,6 @@ Program generateInflow
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,2))
         write(outfilename, '("slices/wslicedata_", I0, ".dat")') myslice
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,3))
-        !if(myid == floor(real(nprocs/2))) write(*,*) "Done with ",myslice-startslice+1,"/",endslice-startslice+1,"... in ", tock(time), "seconds..."
         if(myid == 1) call show_progress(int(myslice-startslice+1,dp),int(endslice-startslice+1,dp),charwidth)
     ! End my slice loop    
     end do
