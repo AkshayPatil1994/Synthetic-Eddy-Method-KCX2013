@@ -1,5 +1,5 @@
 # Compiler
-FC = gfortran
+FC = mpif90
 
 # Compiler flags
 FFLAGS = -ffree-line-length-none -O3

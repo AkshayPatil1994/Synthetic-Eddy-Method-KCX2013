@@ -1,35 +1,49 @@
 Program generateInflow
     use, intrinsic :: ieee_arithmetic
+    use mpi
     use utils
     implicit none
 
-    ! Program Begins
+    ! MPI related 
+    integer :: ierror, nprocs, myid
+    ! Global variables
     integer, parameter :: dp = kind(1.0d0)
+    integer :: time, ierr, iunit
+    character(len=512) :: inputfile
+    logical :: filestatus
+    ! Grid related (nslices == Nx)
+    integer :: nslices, Ny, Nz
+    integer(dp) :: i,j,k
+    real(dp), allocatable, dimension(:) :: z, y
+    real(dp), dimension(2) :: Lx, Ly, Lz
+    ! Decomposition results
+    integer :: startslice, endslice
+    integer :: base_slices, remainder
+    ! Synthetic Generator related
     real(dp), allocatable, dimension(:,:,:) :: random_sequence, spatially_correlated, previous_fluctuation, unscaled_fluctuation
     real(dp), allocatable, dimension(:,:,:) :: instantaneous_velocity
-    integer :: Ny, Nz
-    integer(dp) :: i,j,k
     real(dp) :: integralLengthScale, integralLengthScale_in, gridsizey, gridsizez
     real(dp), allocatable, dimension(:) :: b0j_y, b_y, b0j_z, b_z, dz, dy
     integer, dimension(:) :: seq_shape(3)
     integer(dp) :: n_y, n_z
     real(dp) :: pi, C_XC, deltaT, lagrangianTimeScale, alpha1, alpha2
-    real(dp), allocatable, dimension(:) :: z, y
-    real(dp), dimension(2) :: Lx, Ly, Lz
     real(dp), allocatable :: inflowdata(:,:)
     real(dp), dimension(3,3) :: reynolds_stress_tensor, amplitude_tensor
     integer(dp) :: numcolumns, sizeofarray
-    integer(dp) :: nslices, myslice, charwidth=50
+    integer(dp) :: myslice, charwidth=50
     character(len=100) :: outfilename
     real(dp) :: ibulkvelocity, trueBulkVelocity
-    real(dp) :: Retau, Hin, viscIn, utau_in, bulk_input_velocity 
-    integer :: time, ierr, iunit
-    character(len=512) :: inputfile
-    logical :: filestatus
+    ! Input parameters
+    real(dp) :: Retau, Hin, viscIn, utau_in, bulk_input_velocity  
+!-------------------------------------------------------------------------------------------!
+!                                   PROGRAM BEGINS                                          !
+!-------------------------------------------------------------------------------------------!
+    ! Start the MPI communication world
+    call MPI_INIT(ierror)
+    call MPI_COMM_SIZE(MPI_COMM_WORLD,nprocs,ierror)
+    call MPI_COMM_RANK(MPI_COMM_WORLD,myid,ierror)  
     ! Define pi
     pi = acos(-1.0d0)
-
-    ! Define file unit
     ! Snippet taken from CaNS - Credits to P. Costa
     iunit = 10
     open(newunit=iunit,file='parameters.in',status='old',action='read',iostat=ierr)
@@ -43,6 +57,9 @@ Program generateInflow
       else
         error stop "parameters.in file encountered a problem!"
       end if
+    close(iunit)
+    ! Sync all MPI ranks before proceeding
+    call MPI_BARRIER(MPI_COMM_WORLD,ierror) 
     ! Compute the friction velocity based on input parameters
     utau_in = (Retau*viscIn)/Hin    
     ! Domain parameters  
@@ -104,21 +121,26 @@ Program generateInflow
         deltaT = 0.95*(Lx(2)/nslices)/bulk_input_velocity
     end if
     ! Print logo
-    call printlogo()
-    print *, "-------------------------------------------------------"
-    print *, "Utau input:", utau_in
-    print *, "Integral length scale used", integralLengthScale
-    print *, "Input bulk velocity is", bulk_input_velocity
-    print *, "Lagrangian time scale: ", lagrangianTimeScale
-    print *, "Time step is ", deltaT
-    print *, "-------------------------------------------------------"
-    print *, "WARNING: The digital filter has isotropic kernel both in y and z!"
-    ! Check for the output file status
-    inquire(file="slices", exist=filestatus)
-    if (.not. filestatus) then
-        ! Creating the folder for output
-        print *, " - - - Output directory `slices` does not exist, creating it..."
-        call system('mkdir slices')
+    if(myid == 0) then
+    	call printlogo()
+    	print *, "*** Using ",nprocs, "MPI ranks ***"
+	    print *, "-------------------------------------------------------"
+    	print *, "Utau input:", utau_in
+    	print *, "Integral length scale used", integralLengthScale
+    	print *, "Input bulk velocity is", bulk_input_velocity
+    	print *, "Lagrangian time scale: ", lagrangianTimeScale
+    	print *, "Time step is ", deltaT
+    	print *, "-------------------------------------------------------"
+    	print *, "WARNING: The digital filter has isotropic kernel both in y and z!"
+    endif
+    if(myid == 0) then
+        ! Check for the output file status
+        inquire(file="slices", exist=filestatus)
+        if (.not. filestatus) then
+            ! Creating the folder for output
+            print *, " - - - Output directory `slices` does not exist, creating it..."
+            call system('mkdir slices')
+        endif
     endif
     ! Find the value of n
     n_y = max(floor(integralLengthScale/gridsizey),1)
@@ -126,8 +148,24 @@ Program generateInflow
     ! Based on n_y allocate b0j_y and b_y
     allocate(b0j_y(-n_y:n_y),b_y(-n_y:n_y))
     allocate(b0j_z(-n_z:n_z),b_z(-n_z:n_z))
+    ! Sync all MPI ranks before proceeding
+    call MPI_BARRIER(MPI_COMM_WORLD,ierror) 
+    ! Calculate base number of slices per process and the remainder
+    base_slices = nslices / nprocs
+    remainder = mod(nslices, nprocs)
+    ! Calculate the start and end slice for each process
+    if (myid < remainder) then
+        startslice = myid * (base_slices + 1) + 1
+        endslice = startslice + base_slices
+    else
+        startslice = remainder * (base_slices + 1) + (myid - remainder) * base_slices + 1
+        endslice = startslice + base_slices - 1
+    end if
+    print *, myid, startslice, endslice
+    ! Sync all MPI ranks before proceeding
+    call MPI_BARRIER(MPI_COMM_WORLD,ierror) 
     ! Number of slices
-    do myslice=1,nslices
+    do myslice=startslice,endslice
         call tick(time)
         ! Define what b model parameter is
         do i = -n_y, n_y
@@ -156,7 +194,7 @@ Program generateInflow
         C_XC = pi/4.0
         alpha1 = exp(-C_XC*deltaT/lagrangianTimeScale)
         alpha2 = exp(-2.0d0*C_XC*deltaT/lagrangianTimeScale)
-        if(myslice==1) print *, "Value of alpha is:", alpha1, alpha2
+        if(myslice==1 .and. myid == 0) print *, "Value of alpha is:", alpha1, alpha2
         unscaled_fluctuation = alpha1 * previous_fluctuation + sqrt(1 - alpha2) * spatially_correlated
         ! Loop over z and assign the values
         do k=2,Nz
@@ -206,9 +244,12 @@ Program generateInflow
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,2))
         write(outfilename, '("slices/wslicedata_", I0, ".dat")') myslice
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,3))
-        !write(*,*) "Done with ",myslice,"/",nslices,"... in ", tock(time), "seconds..."
-        call show_progress(myslice,nslices,charwidth)
+        !if(myid == floor(real(nprocs/2))) write(*,*) "Done with ",myslice-startslice+1,"/",endslice-startslice+1,"... in ", tock(time), "seconds..."
+        if(myid == 1) call show_progress(int(myslice-startslice+1,dp),int(endslice-startslice+1,dp),charwidth)
     ! End my slice loop    
     end do
-
+    ! Sync all MPI ranks before proceeding
+    call MPI_BARRIER(MPI_COMM_WORLD,ierror) 
+    ! Finalise the MPI communication
+    call MPI_FINALIZE(ierror)
 End Program generateInflow

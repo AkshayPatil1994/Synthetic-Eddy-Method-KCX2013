@@ -365,10 +365,8 @@ Contains
   !       write(*,*)  ! Clears the line after the bar (to update on the same line)
   !   end if
   ! end subroutine show_progress
+
   subroutine show_progress(current, total, width)
-    ! 
-    ! This subroutine aims to display a progress bar and overwrite the same line
-    !
     implicit none
     integer, parameter :: dp = kind(1.0d0)
     integer(dp), intent(in) :: current, total, width
