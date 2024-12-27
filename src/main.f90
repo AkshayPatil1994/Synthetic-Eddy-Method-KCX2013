@@ -8,7 +8,8 @@ Program generateInflow
     integer :: ierror, nprocs, myid
     ! Global variables
     integer, parameter :: dp = kind(1.0d0)
-    integer :: time, ierr, iunit
+    integer ::  ierr, iunit
+    real(dp) :: start_time
     character(len=512) :: inputfile
     logical :: filestatus
     ! Grid related (nslices == Nx)
@@ -167,8 +168,8 @@ Program generateInflow
     ! Sync all MPI ranks before proceeding
     call MPI_BARRIER(MPI_COMM_WORLD,ierror) 
     ! Number of slices
+    call cpu_time(start_time)
     do myslice=startslice,endslice
-        call tick(time)
         ! Define what b model parameter is
         do i = -n_y, n_y
             b0j_y(i) = exp(-pi * abs(real(i, dp)) / (2.0*real(n_y, dp)))
@@ -242,7 +243,7 @@ Program generateInflow
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,2))
         write(outfilename, '("slices/wslicedata_", I0, ".dat")') myslice
         call write_2d_array_to_file(outfilename,instantaneous_velocity(:,:,3))
-        if(myid == 1) call show_progress(int(myslice-startslice+1,dp),int(endslice-startslice+1,dp),charwidth)
+        if(myid == 1) call show_progress(myslice-startslice+1,int(endslice-startslice+1,dp),charwidth,start_time)
     ! End my slice loop    
     end do
     ! Sync all MPI ranks before proceeding

@@ -366,28 +366,82 @@ Contains
   !   end if
   ! end subroutine show_progress
 
-  subroutine show_progress(current, total, width)
+!   subroutine show_progress(current, total, width)
+!     implicit none
+!     integer, parameter :: dp = kind(1.0d0)
+!     integer(dp), intent(in) :: current, total, width
+!     integer(dp) :: progress
+!     real(dp) :: percent
+!     character(len=width) :: bar
+
+!     ! Calculate percentage and progress bar length
+!     percent = real(current) / real(total) * 100.0
+!     progress = int(real(current) / real(total) * width)
+
+!     ! Construct the progress bar string
+!     bar = repeat('|', progress) // repeat(' ', width - progress)
+
+!     ! Print the progress bar with a carriage return to stay on the same line
+!     write(*,'(a, "|", a, "|", f6.2, "%", 1x, i4, "/", i4)', advance='no') char(13), bar, percent, current, total
+
+!     ! If the current iteration is the last, move to a new line
+!     if (current == total) then
+!         print *  ! Move to the next line after the final iteration
+!     end if
+! end subroutine show_progress
+  subroutine show_progress(current, total, width, start_time)
+    !
+    ! This subroutine aims to display a progress bar and overwrite the same line.
+    ! It also displays elapsed time and estimated time remaining.
+    !
+    use mpi, only : MPI_WTIME
     implicit none
+    ! Define double precision 
     integer, parameter :: dp = kind(1.0d0)
-    integer(dp), intent(in) :: current, total, width
-    integer(dp) :: progress
-    real(dp) :: percent
-    character(len=width) :: bar
+    ! Input
+    integer(dp), intent(in) :: current, total               ! Current and total values
+    integer(dp), intent(in) :: width                        ! Width of the progress bar
+    real(dp), intent(in) :: start_time                  ! Start time of the process (computes estimated time)
+    ! Local variables
+    integer :: progress                                 ! Current progress counter
+    real(dp) :: percent, elapsed_time, estimated_time   ! Percentage completion and time counters
+    character(len=width) :: bar                         ! Character bar size
+    real(dp) :: current_time                            ! Log for current time
+
+    ! Get the current time
+    current_time = MPI_WTIME()
+
+    ! Calculate elapsed time
+    elapsed_time = current_time - start_time
+
+    ! Estimate remaining time
+    if (current > 0) then
+        estimated_time = elapsed_time * (real(total, dp) - real(current, dp)) / real(current, dp)
+    else
+        estimated_time = 0.0_dp
+    end if
 
     ! Calculate percentage and progress bar length
-    percent = real(current) / real(total) * 100.0
-    progress = int(real(current) / real(total) * width)
+    if (total > 0) then
+        percent = real(current, dp) / real(total, dp) * 100.0_dp
+        progress = int(real(current, dp) / real(total, dp) * width)
+    else
+        percent = 0.0_dp
+        progress = 0
+    end if
 
     ! Construct the progress bar string
     bar = repeat('|', progress) // repeat(' ', width - progress)
 
-    ! Print the progress bar with a carriage return to stay on the same line
-    write(*,'(a, "|", a, "|", f6.2, "%", 1x, i4, "/", i4)', advance='no') char(13), bar, percent, current, total
+    ! Print the progress bar with estimated time and elapsed time
+    write(*,'(a, "|", a, "|", f6.2, "%", 1x, i8, "/", i8, " Elapsed: ", f8.2, "s Remaining: ", f8.2, "s")', advance='no') &
+        char(13), bar, percent, current, total, elapsed_time, estimated_time
 
     ! If the current iteration is the last, move to a new line
     if (current == total) then
         print *  ! Move to the next line after the final iteration
     end if
+
 end subroutine show_progress
 
   subroutine printlogo()
