@@ -3,7 +3,7 @@
 ## How to compile the code
 ```
 cd src
-gfortran -ffree-line-length-none -O3 utils.f90 main.f90 -o genic
+make
 ```
 
 ## How to change parameters
