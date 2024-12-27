@@ -31,7 +31,7 @@ Program generateInflow
     real(dp), allocatable :: inflowdata(:,:)
     real(dp), dimension(3,3) :: reynolds_stress_tensor, amplitude_tensor
     integer(dp) :: numcolumns, sizeofarray
-    integer(dp) :: myslice, charwidth=50
+    integer(dp) :: myslice, charwidth=20
     character(len=100) :: outfilename
     real(dp) :: ibulkvelocity, trueBulkVelocity
     ! Input parameters
