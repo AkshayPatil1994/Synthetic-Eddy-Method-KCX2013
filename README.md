@@ -1,5 +1,7 @@
 # MPI - Implementation of the Synthetic Eddy Method based on Kim, Castro, Xie (2013)
 
+Manuscript under review: [SSRN Pre-print](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5101082)
+
 ## How to compile the code
 ```
 cd src
